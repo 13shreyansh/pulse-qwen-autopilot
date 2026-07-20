@@ -750,9 +750,11 @@ async def run_agent(
         raise HTTPException(status_code=503, detail="Qwen Cloud is not configured")
     orchestrator = AgentOrchestrator(QwenClient(api_key))
     try:
-        async with asyncio.timeout(TOTAL_AGENT_BUDGET_SECONDS):
-            return await orchestrator.run(body, request.headers.get("x-fc-request-id"))
-    except TimeoutError as error:
+        return await asyncio.wait_for(
+            orchestrator.run(body, request.headers.get("x-fc-request-id")),
+            timeout=TOTAL_AGENT_BUDGET_SECONDS,
+        )
+    except asyncio.TimeoutError as error:
         raise HTTPException(status_code=503, detail="agent exceeded the total time budget") from error
     except (QwenUnavailable, AgentIncomplete) as error:
         raise HTTPException(status_code=503, detail=str(error)) from error
