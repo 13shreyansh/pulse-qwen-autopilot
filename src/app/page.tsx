@@ -133,7 +133,7 @@ type IncidentLocation = {
   latitude: number;
   longitude: number;
   accuracy?: number;
-  source: "gps";
+  source: "gps" | "fictional_demo";
 };
 
 type HospitalCandidate = {
@@ -628,6 +628,34 @@ export default function Home() {
     }
 
     await startSpeechCapture();
+  }
+
+  function startFictionalSingaporeDemo() {
+    if (locationState === "locking") return;
+
+    setStep("listen");
+    setReport("");
+    setSubmittedReport("");
+    setTriageResult(null);
+    setDispatchCall({ status: "idle" });
+    setAgentRun(null);
+    setSelectedFacilityId("");
+    setOverrideReason("");
+    setHospitals([]);
+    setSendPhase("idle");
+    setSilenceNotice("");
+    setTranscriptSource("typed");
+    setLocationError("");
+    setIncidentLocation({
+      label: "Fictional Singapore demo location",
+      latitude: 1.3521,
+      longitude: 103.8198,
+      accuracy: 18,
+      source: "fictional_demo",
+    });
+    setLocationState("locked");
+    setSpeechState("idle");
+    setMicState("idle");
   }
 
   async function prepareReportConfirmation(value = report) {
@@ -1291,6 +1319,7 @@ export default function Home() {
               locationError={locationError}
               locationState={locationState}
               onStart={startPulse}
+              onStartDemo={startFictionalSingaporeDemo}
             />
           )}
 
@@ -1401,10 +1430,12 @@ function StartScreen({
   locationError,
   locationState,
   onStart,
+  onStartDemo,
 }: {
   locationError: string;
   locationState: LocationState;
   onStart: () => void;
+  onStartDemo: () => void;
 }) {
   const isLocating = locationState === "locking";
 
@@ -1447,6 +1478,19 @@ function StartScreen({
                 <span className="text-xl font-semibold leading-6 sm:text-2xl">{isLocating ? "Getting location" : "Start Emergency Help"}</span>
               </span>
             </button>
+
+            <button
+              type="button"
+              onClick={onStartDemo}
+              disabled={isLocating}
+              className="mt-4 min-h-14 w-full rounded-lg border border-[#1d4ed8] bg-[#eff6ff] px-4 text-base font-semibold text-[#1d4ed8] transition hover:bg-[#dbeafe] focus:outline-none focus:ring-4 focus:ring-[rgba(29,78,216,0.16)] disabled:opacity-60 lg:max-w-xl"
+            >
+              Try fictional Singapore demo
+            </button>
+
+            <p className="mt-2 max-w-xl text-xs font-bold leading-5 text-[#64748b]">
+              Uses fixed synthetic coordinates and typed input. Public demo mode never contacts a real hospital or emergency service.
+            </p>
 
             <p className="mt-6 max-w-xl text-sm font-bold leading-6 text-[#475569]">
               Pulse prepares a plan after your report. Nobody is contacted until you approve it. First, make sure you are safe.
