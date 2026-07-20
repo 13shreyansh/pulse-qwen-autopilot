@@ -47,7 +47,7 @@ export function QwenCoordinatingScreen({
           <div className="mt-5 grid gap-4">
             {[
               [ShieldCheck, "Safety protocol", "Deterministic guidance only"],
-              [MapPin, "Nearby care", "Google listing and travel evidence"],
+              [MapPin, "Nearby care", "Public listing and distance evidence"],
               [Lock, "Human gate", "No contact before approval"],
             ].map(([Icon, title, detail]) => {
               const StepIcon = Icon as typeof ShieldCheck;
@@ -93,7 +93,16 @@ function FacilityOption({
           <div className="mt-3 flex flex-wrap gap-2 text-xs font-bold text-[#475569]">
             <span className="rounded-full bg-white px-2 py-1">{facility.distanceKm} km</span>
             {facility.travelTimeMinutes != null && <span className="rounded-full bg-white px-2 py-1">~{Math.round(facility.travelTimeMinutes)} min drive</span>}
-            <span className="rounded-full bg-white px-2 py-1">Public Google listing</span>
+            <a
+              href={facility.mapsUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-full bg-white px-2 py-1 underline decoration-dotted underline-offset-2"
+            >
+              {facility.source === "openstreetmap"
+                ? `OpenStreetMap · ${facility.sourceAsOf || "live"} · © contributors`
+                : "Public Google listing"}
+            </a>
           </div>
           <p className="mt-3 text-sm font-semibold leading-6 text-[#475569]">{facility.rankingReason}</p>
         </div>

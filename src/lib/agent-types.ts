@@ -28,7 +28,8 @@ export type AgentFacility = {
   confidence: "high" | "medium" | "low";
   rankingReason: string;
   mapsUrl: string;
-  source: "google_places";
+  source: "google_places" | "openstreetmap";
+  sourceAsOf?: string;
   availabilityStatus: "unknown_until_confirmed";
 };
 
@@ -129,7 +130,7 @@ export function validateAgentRunResult(value: unknown): Omit<AgentRunResult, "ag
       !isString(facility.address) ||
       !isFiniteNumber(facility.distanceKm) ||
       !isFiniteNumber(facility.score) ||
-      facility.source !== "google_places" ||
+      (facility.source !== "google_places" && facility.source !== "openstreetmap") ||
       facility.availabilityStatus !== "unknown_until_confirmed"
     ) {
       throw new Error("Agent returned invalid facility evidence.");

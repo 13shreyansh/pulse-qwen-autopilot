@@ -251,6 +251,107 @@ def distance_km(from_lat: float, from_lng: float, to_lat: float, to_lng: float) 
     return round(earth_km * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a)), 1)
 
 
+SINGAPORE_OSM_SNAPSHOT = [
+    {
+        "id": "osm_way_260549167",
+        "name": "Mount Elizabeth Novena Hospital",
+        "address": "38 Irrawaddy Road",
+        "phone": "+65 69330000",
+        "latitude": 1.32200135,
+        "longitude": 103.8445055,
+        "mapsUrl": "https://www.openstreetmap.org/way/260549167",
+    },
+    {
+        "id": "osm_way_74715098",
+        "name": "Mount Alvernia Hospital",
+        "address": "820 Thomson Road",
+        "latitude": 1.34220205,
+        "longitude": 103.8379314,
+        "mapsUrl": "https://www.openstreetmap.org/way/74715098",
+    },
+    {
+        "id": "osm_way_41890511",
+        "name": "Gleneagles Hospital",
+        "address": "6 Napier Road",
+        "phone": "+65 6575 7575",
+        "latitude": 1.30736745,
+        "longitude": 103.81982955,
+        "mapsUrl": "https://www.openstreetmap.org/way/41890511",
+    },
+    {
+        "id": "osm_node_6746490215",
+        "name": "Farrer Park Hospital",
+        "address": "1 Farrer Park Station Road",
+        "phone": "+65 6363 1818",
+        "latitude": 1.3126,
+        "longitude": 103.854,
+        "mapsUrl": "https://www.openstreetmap.org/node/6746490215",
+    },
+    {
+        "id": "osm_node_9152442812",
+        "name": "National University Hospital",
+        "address": "Lower Kent Ridge Road",
+        "latitude": 1.2941992,
+        "longitude": 103.7830593,
+        "mapsUrl": "https://www.openstreetmap.org/node/9152442812",
+    },
+    {
+        "id": "osm_way_34403524",
+        "name": "Changi General Hospital",
+        "address": "Simei Street 3",
+        "latitude": 1.3403638,
+        "longitude": 103.9491054,
+        "mapsUrl": "https://www.openstreetmap.org/way/34403524",
+    },
+    {
+        "id": "osm_way_33570275",
+        "name": "Sengkang General & Community Hospital",
+        "address": "110 Sengkang East Way",
+        "latitude": 1.3952091,
+        "longitude": 103.8925269,
+        "mapsUrl": "https://www.openstreetmap.org/way/33570275",
+    },
+]
+
+
+def singapore_snapshot_facility_search(location: Location) -> list[dict[str, Any]]:
+    if distance_km(location.latitude, location.longitude, 1.3521, 103.8198) > 80:
+        raise ToolDispatchError("No cached Singapore facility evidence covers this location")
+    facilities: list[dict[str, Any]] = []
+    for listing in SINGAPORE_OSM_SNAPSHOT:
+        facility = {
+            **listing,
+            "distanceKm": distance_km(
+                location.latitude,
+                location.longitude,
+                listing["latitude"],
+                listing["longitude"],
+            ),
+            "source": "openstreetmap",
+            "businessStatus": None,
+            "openNow": None,
+        }
+        score, confidence, reason = score_facility(facility)
+        facilities.append(
+            {
+                "id": facility["id"],
+                "name": facility["name"],
+                "address": facility["address"],
+                "phone": facility.get("phone"),
+                "distanceKm": facility["distanceKm"],
+                "score": score,
+                "confidence": confidence,
+                "rankingReason": reason,
+                "mapsUrl": facility["mapsUrl"],
+                "source": "openstreetmap",
+                "sourceAsOf": "2026-07-20",
+                "availabilityStatus": "unknown_until_confirmed",
+            }
+        )
+    facilities.sort(key=lambda item: (-item["score"], item["distanceKm"]))
+    return facilities[:5]
+
+
 def score_facility(facility: dict[str, Any]) -> tuple[float, str, str]:
     name = facility["name"].lower()
     capability = 30 if re.search(r"general|university|medical cent|hospital|emergency|trauma|cardiac|maternity", name) else 15
@@ -368,7 +469,7 @@ async def google_facility_search(location: Location, radius_meters: int) -> list
                 "confidence": confidence,
                 "rankingReason": reason,
                 "mapsUrl": facility["mapsUrl"],
-                "source": "google_places",
+                "source": facility.get("source", "google_places"),
                 "availabilityStatus": "unknown_until_confirmed",
             }
         )
@@ -376,6 +477,165 @@ async def google_facility_search(location: Location, radius_meters: int) -> list
     if not public_facilities:
         raise ToolDispatchError("No suitable emergency-care listing was found nearby")
     return public_facilities[:5]
+
+
+def osm_address(tags: dict[str, Any]) -> str:
+    street = " ".join(
+        part for part in [tags.get("addr:housenumber"), tags.get("addr:street")] if part
+    )
+    locality = tags.get("addr:suburb") or tags.get("addr:city") or tags.get("addr:district")
+    parts = [part for part in [street, locality] if part]
+    return ", ".join(parts) or "Address unavailable in public map data"
+
+
+async def openstreetmap_facility_search(location: Location, radius_meters: int) -> list[dict[str, Any]]:
+    endpoint = os.getenv("OVERPASS_API_URL", "https://overpass-api.de/api/interpreter")
+    query = (
+        "[out:json][timeout:18];("
+        f'nwr["amenity"="hospital"](around:{radius_meters},{location.latitude},{location.longitude});'
+        f'nwr["healthcare"="hospital"](around:{radius_meters},{location.latitude},{location.longitude});'
+        ");out center tags 50;"
+    )
+    try:
+        async with httpx.AsyncClient(timeout=22) as client:
+            response = await client.get(
+                endpoint,
+                params={"data": query},
+                headers={
+                    "User-Agent": "Pulse-Qwen-Autopilot/1.0 (https://pulse-qwen-autopilot.vercel.app)"
+                },
+            )
+    except httpx.HTTPError as error:
+        raise ToolDispatchError("OpenStreetMap facility search could not be completed") from error
+    if not response.is_success:
+        raise ToolDispatchError("OpenStreetMap facility search could not be completed")
+
+    elements = response.json().get("elements", [])
+    facilities: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for element in elements:
+        tags = element.get("tags") or {}
+        name = (tags.get("name:en") or tags.get("name") or "").strip()
+        point = element if element.get("lat") is not None else element.get("center") or {}
+        latitude = point.get("lat")
+        longitude = point.get("lon")
+        if not name or latitude is None or longitude is None:
+            continue
+        searchable = f"{name} {osm_address(tags)}".lower()
+        if re.search(r"\b(eye|dental|skin|derma|fertility|ivf|cosmetic|diagnostic|imaging|proton|cancer|mental)\b", searchable) and not re.search(
+            r"general|hospital|emergency|trauma|medical cent", searchable
+        ):
+            continue
+        facility_id = f"osm_{element.get('type', 'node')}_{element.get('id')}"
+        if facility_id in seen:
+            continue
+        seen.add(facility_id)
+        facilities.append(
+            {
+                "id": facility_id,
+                "name": name,
+                "address": osm_address(tags),
+                "phone": tags.get("contact:phone") or tags.get("phone"),
+                "distanceKm": distance_km(
+                    location.latitude, location.longitude, latitude, longitude
+                ),
+                "mapsUrl": f"https://www.openstreetmap.org/{element.get('type', 'node')}/{element.get('id')}",
+                "source": "openstreetmap",
+                "businessStatus": None,
+                "openNow": None,
+            }
+        )
+
+    public_facilities: list[dict[str, Any]] = []
+    for facility in facilities:
+        score, confidence, reason = score_facility(facility)
+        public_facilities.append(
+            {
+                "id": facility["id"],
+                "name": facility["name"],
+                "address": facility["address"],
+                "phone": facility.get("phone"),
+                "distanceKm": facility["distanceKm"],
+                "score": score,
+                "confidence": confidence,
+                "rankingReason": reason,
+                "mapsUrl": facility["mapsUrl"],
+                "source": "openstreetmap",
+                "availabilityStatus": "unknown_until_confirmed",
+            }
+        )
+    public_facilities.sort(key=lambda item: (-item["score"], item["distanceKm"]))
+    if not public_facilities:
+        raise ToolDispatchError("No suitable emergency-care listing was found nearby")
+    return public_facilities[:5]
+
+
+async def pulse_facility_proxy_search(location: Location, radius_meters: int) -> list[dict[str, Any]]:
+    endpoint = os.getenv("PULSE_FACILITY_SEARCH_URL")
+    if not endpoint:
+        raise ToolDispatchError("Pulse facility proxy is not configured")
+    try:
+        async with httpx.AsyncClient(timeout=25) as client:
+            response = await client.get(
+                endpoint,
+                params={
+                    "lat": location.latitude,
+                    "lng": location.longitude,
+                    "radiusMeters": radius_meters,
+                },
+            )
+    except httpx.HTTPError as error:
+        raise ToolDispatchError("Public facility proxy search could not be completed") from error
+    if not response.is_success:
+        raise ToolDispatchError("Public facility proxy search could not be completed")
+
+    hospitals = response.json().get("hospitals") or []
+    facilities: list[dict[str, Any]] = []
+    for hospital in hospitals[:5]:
+        if (
+            not isinstance(hospital, dict)
+            or not hospital.get("id")
+            or not hospital.get("name")
+            or hospital.get("source") not in {"google_places", "openstreetmap"}
+        ):
+            continue
+        facilities.append(
+            {
+                "id": hospital["id"],
+                "name": hospital["name"],
+                "address": hospital.get("address") or "Address unavailable in public listing",
+                "phone": hospital.get("phone"),
+                "distanceKm": hospital.get("distanceKm"),
+                "travelTimeMinutes": hospital.get("travelTimeMinutes"),
+                "score": hospital.get("score"),
+                "confidence": hospital.get("confidence") or "low",
+                "rankingReason": hospital.get("rankingReason") or "Sourced public listing",
+                "mapsUrl": hospital.get("mapsUrl"),
+                "source": hospital["source"],
+                "availabilityStatus": "unknown_until_confirmed",
+            }
+        )
+    if not facilities:
+        raise ToolDispatchError("No suitable emergency-care listing was found nearby")
+    return facilities
+
+
+async def public_facility_search(location: Location, radius_meters: int) -> list[dict[str, Any]]:
+    if os.getenv("GOOGLE_MAPS_API_KEY") or os.getenv("GOOGLE_PLACES_API_KEY"):
+        try:
+            return await google_facility_search(location, radius_meters)
+        except ToolDispatchError:
+            pass
+    try:
+        return singapore_snapshot_facility_search(location)
+    except ToolDispatchError:
+        pass
+    if os.getenv("PULSE_FACILITY_SEARCH_URL"):
+        try:
+            return await pulse_facility_proxy_search(location, radius_meters)
+        except ToolDispatchError:
+            pass
+    return await openstreetmap_facility_search(location, radius_meters)
 
 
 TOOLS = [
@@ -546,7 +806,7 @@ class AgentContext:
 
 
 class AgentOrchestrator:
-    def __init__(self, qwen: Any, facility_search: FacilitySearch = google_facility_search):
+    def __init__(self, qwen: Any, facility_search: FacilitySearch = public_facility_search):
         self.qwen = qwen
         self.facility_search = facility_search
 
@@ -720,6 +980,9 @@ async def health() -> dict[str, Any]:
         "service": "pulse-qwen-agent",
         "qwenConfigured": bool(os.getenv("DASHSCOPE_API_KEY")),
         "googleConfigured": bool(os.getenv("GOOGLE_MAPS_API_KEY") or os.getenv("GOOGLE_PLACES_API_KEY")),
+        "facilitySource": "google_places"
+        if os.getenv("GOOGLE_MAPS_API_KEY") or os.getenv("GOOGLE_PLACES_API_KEY")
+        else "openstreetmap_snapshot",
         "model": QWEN_MODEL,
     }
 

@@ -14,6 +14,7 @@ from backend.app import (
     QwenClient,
     QwenUnavailable,
     score_facility,
+    singapore_snapshot_facility_search,
     ToolDispatchError,
 )
 
@@ -225,3 +226,15 @@ def test_listing_without_phone_remains_unverified():
     assert confidence == "medium"
     assert "phone not listed" in reason
     assert "unverified" in reason
+
+
+def test_singapore_snapshot_uses_real_dated_osm_ids_without_availability_claims():
+    facilities = singapore_snapshot_facility_search(
+        Location(latitude=1.3521, longitude=103.8198, accuracyMeters=18)
+    )
+
+    assert len(facilities) == 5
+    assert all(item["id"].startswith("osm_") for item in facilities)
+    assert all(item["source"] == "openstreetmap" for item in facilities)
+    assert all(item["sourceAsOf"] == "2026-07-20" for item in facilities)
+    assert all(item["availabilityStatus"] == "unknown_until_confirmed" for item in facilities)

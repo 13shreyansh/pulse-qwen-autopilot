@@ -13,8 +13,8 @@ This guide deploys only the FastAPI agent backend. It does not touch the origina
 - Minimum idle instances: `0`
 - Maximum instances: `1` for the hackathon demo
 - Public HTTP trigger: `GET`, `POST`, `OPTIONS`
-- Internet access: enabled so the function can reach Qwen Cloud and Google APIs
-- Logging: enabled
+- Internet access: enabled so the function can reach Qwen Cloud and configured facility sources
+- Logging: optional; Alibaba Log Service is billable and was not enabled for the no-paid-overage deployment
 
 Do not add a payment method or enable paid overage solely for this submission.
 
@@ -47,6 +47,8 @@ DASHSCOPE_API_KEY
 QWEN_MODEL=qwen3.7-plus
 QWEN_BASE_URL=https://dashscope-intl.aliyuncs.com/compatible-mode/v1
 GOOGLE_MAPS_API_KEY
+OVERPASS_API_URL
+PULSE_FACILITY_SEARCH_URL=https://<new-vercel-project>.vercel.app/api/hospitals
 PULSE_AGENT_BACKEND_TOKEN
 ALLOWED_ORIGINS=https://<new-vercel-project>.vercel.app
 PULSE_DEPLOYMENT_REGION=ap-southeast-1
@@ -80,14 +82,14 @@ PULSE_AGENT_RECEIPT_SECRET=<new-independent-secret>
 PULSE_DISPATCH_SESSION_SECRET=<new-independent-secret>
 ```
 
-Re-enter the approved existing OpenAI, Google, Vapi, Twilio, response-line, and dispatch variables securely. Do not copy `.env.local` into the repository.
+Re-enter the approved existing OpenAI, Google (if available), Vapi, Twilio, response-line, and dispatch variables securely. Do not copy `.env.local` into the repository. If Google is not configured, the public Singapore demo uses the dated OpenStreetMap snapshot documented in the README.
 
 ## 6. Capture authentic proof
 
 Save these under `docs/proof/` after deployment:
 
 1. Function Compute console showing `pulse-qwen-agent`, Singapore region, active status, and the public trigger URL.
-2. Invocation log showing the same Function Compute request ID displayed in Pulse.
+2. The matching Function Compute request ID displayed in Pulse; add an invocation-log screenshot only if Log Service is already available without enabling paid usage.
 3. Public `/api/deployment` JSON.
 4. Repository view of [backend/app.py](../backend/app.py) showing the Qwen hostname, model, typed tools, and `x-fc-request-id` handling.
 

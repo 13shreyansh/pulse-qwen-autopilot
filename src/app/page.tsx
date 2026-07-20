@@ -147,7 +147,8 @@ type HospitalCandidate = {
   confidence: "high" | "medium" | "low";
   rankingReason: string;
   mapsUrl: string;
-  source: "google_places";
+  source: "google_places" | "openstreetmap";
+  sourceAsOf?: string;
   availabilityStatus?: "unknown_until_confirmed";
 };
 

@@ -8,7 +8,7 @@
 
 Show `docs/architecture.png`.
 
-“Qwen interprets and orchestrates. Deterministic code owns safety instructions, Google facility evidence, hashes, and approval enforcement. The Qwen agent runs here on Alibaba Function Compute.”
+“Qwen interprets and orchestrates. Deterministic code owns safety instructions, sourced facility evidence, hashes, and approval enforcement. The Qwen agent runs here on Alibaba Function Compute.”
 
 ## 0:32–1:12 — ambiguous report and tool trace
 
@@ -18,7 +18,7 @@ Confirm the transcript. Point out that immediate conservative guidance appears w
 
 ## 1:12–1:42 — grounded recommendation
 
-Show the selected protocol, Google listing evidence, travel time, plan rationale, and plan hash.
+Show the selected protocol, dated OpenStreetMap listing evidence and source link, distance, plan rationale, and plan hash.
 
 “Pulse never says this hospital has beds or can accept the patient. A public listing is evidence, not readiness.”
 

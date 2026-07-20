@@ -24,7 +24,7 @@ type HospitalCandidate = {
   phone?: string;
   distanceKm?: number;
   travelTimeMinutes?: number;
-  source?: "google_places";
+  source?: "google_places" | "openstreetmap";
   mapsUrl?: string;
   score?: number;
   confidence?: "high" | "medium" | "low";
@@ -902,12 +902,16 @@ async function verifiedHospitalPackage(request: NextRequest, body: DispatchReque
   const data = (await response.json().catch(() => null)) as {
     incidentLocation?: DispatchRequest["incidentLocation"];
     hospitals?: HospitalCandidate[];
-    source?: "google_places" | "unavailable";
+    source?: "google_places" | "openstreetmap" | "unavailable";
     error?: string;
   } | null;
 
-  if (!response.ok || data?.source !== "google_places" || !data.hospitals?.[0]) {
-    throw new Error(data?.error || "Verified Google hospital search failed.");
+  if (
+    !response.ok ||
+    (data?.source !== "google_places" && data?.source !== "openstreetmap") ||
+    !data.hospitals?.[0]
+  ) {
+    throw new Error(data?.error || "Verified public hospital search failed.");
   }
 
   const selectedHospital = data.hospitals.find((hospital) => hospital.id === body.selectedFacilityId);
@@ -973,7 +977,7 @@ export async function POST(request: NextRequest) {
     };
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Verified Google hospital search failed." },
+      { error: error instanceof Error ? error.message : "Verified public hospital search failed." },
       { status: 502 },
     );
   }

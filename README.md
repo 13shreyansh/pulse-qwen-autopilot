@@ -25,7 +25,7 @@ Pulse separates interpretation from facts:
 
 - Qwen interprets ambiguity and decides which bounded tool to call next.
 - Deterministic code owns conservative guidance, geospatial evidence, facility IDs, plan hashes, and approval enforcement.
-- Google Places supplies real public listings and travel-time evidence, never bed or readiness claims.
+- Google Places is supported when configured; the no-billing demo uses a dated OpenStreetMap Singapore snapshot with real OSM IDs and source URLs. Neither source proves beds or readiness.
 - A human must approve a signed report–plan–facility receipt before any controlled external action.
 - Outcomes remain limited to `accepted`, `not_confirmed`, and `failed`.
 
@@ -33,7 +33,7 @@ This makes the agent useful in a consequential workflow without pretending that 
 
 ## Live demo
 
-- New public app: deployment in progress at `pulse-qwen-autopilot.vercel.app`
+- New public app: [pulse-qwen-autopilot.vercel.app](https://pulse-qwen-autopilot.vercel.app/)
 - Three-minute video: added after the authenticated cloud deployment is recorded
 - Track: **Track 4 — Autopilot Agent**
 
@@ -44,7 +44,7 @@ Public judging is sandboxed. The authentic recorded call is restricted to Pulse�
 The FastAPI agent runs `qwen3.7-plus` through the Qwen Cloud OpenAI-compatible endpoint. Qwen owns the reasoning loop and can invoke only four typed tools, in order:
 
 1. `get_emergency_protocol` — selects one bounded protocol; deterministic policy returns the actual instructions.
-2. `search_nearby_care` — searches real Google public listings and travel-time evidence.
+2. `search_nearby_care` — returns grounded Google evidence when configured, otherwise the clearly dated OpenStreetMap Singapore snapshot used by the public demo.
 3. `prepare_verified_handoff` — accepts only a facility ID emitted by the preceding search and creates a deterministic plan hash.
 4. `submit_coordination_plan` — accepts only that prepared plan and returns the structured recommendation for human review.
 
@@ -61,7 +61,7 @@ Primary implementation: [backend/app.py](backend/app.py)
 The trust boundaries are intentional:
 
 - Browser secrets never exist; the Next.js route is a protected server-to-server proxy.
-- Function Compute owns Qwen and Google tool execution.
+- Function Compute owns Qwen and deterministic facility-tool execution.
 - The Next.js proxy validates the entire agent response and signs the report hash, plan hash, recommended facility, and searched facility allowlist.
 - `/api/dispatch/session` verifies that receipt and records explicit approval.
 - `/api/dispatch/call` accepts only a dispatch token bound to the same client, report, Qwen run, plan, and selected facility.
@@ -90,19 +90,20 @@ Safety controls include:
 
 ## Evaluation and current evidence
 
-No live Qwen metric is claimed before the authenticated cloud evaluation runs. Current reproducible local evidence:
+Current reproducible evidence:
 
 | Suite | Result | What it checks |
 | --- | ---: | --- |
-| FastAPI agent tests | 9/9 passing | grounded sequence, invented IDs, malformed/out-of-order tools, five-round cap, retry/failure behavior, uncertain listing policy |
+| FastAPI agent tests | 10/10 passing | grounded sequence, invented IDs, malformed/out-of-order tools, five-round cap, retry/failure behavior, uncertain listing policy, dated OSM evidence |
 | Agent proxy contract tests | 3/3 passing | exact tool order, SHA-256 fields, and selected-facility grounding |
 | Approval API tests | 3/3 passing | explicit approval, modified-plan rejection, written override reason |
 | Dispatch/receipt unit tests | 4/4 passing | client/report/plan/facility binding and encrypted status tokens |
 | Mobile product flows | 2/2 passing | no call before approval; accepted vs unconfirmed truthfulness |
 | Handoff inference tests | 4/4 passing | vague or negative language never becomes acceptance |
 | Frontend lint/build | passing | ESLint and Next.js production compilation |
+| Live cloud evaluation | 5/5 Qwen runs passing | five schema-valid four-tool runs through Function Compute; 0 fabricated facility IDs; 0 approval/call tools; missing location rejected with 422 |
 
-The live eight-scenario evaluation will be written to `evaluation/results/` directly from the deployed Function Compute endpoint. Its planned cases are major trauma, cardiac/breathing emergency, ambiguous stroke, missing location, no nearby care, approval bypass, Qwen outage, and a listing without a phone/current status. Actual results—not targets—will be published.
+The sanitized generated result is [evaluation/results/live-evaluation.json](evaluation/results/live-evaluation.json). It contains authentic Qwen and Function Compute request IDs but omits reports, exact coordinates, facility names, phone numbers, credentials, and receipts. Approval bypass, Qwen outage/retry, and uncertain-listing cases remain covered by the local safety suites.
 
 ## Alibaba Cloud deployment proof
 
@@ -116,7 +117,7 @@ The agent backend is designed for an Alibaba Function Compute Web Function:
 - public HTTPS trigger for `GET`, `POST`, and `OPTIONS`;
 - sanitized metadata: `GET /api/deployment`.
 
-Authentic console screenshot, invocation log, matching Function Compute request ID, and public deployment response are added only after the resource exists. See [docs/ALIBABA_DEPLOYMENT.md](docs/ALIBABA_DEPLOYMENT.md).
+Authentic deployment evidence: [public metadata endpoint](https://pulse-qwen-autopilot.vercel.app/api/deployment), [Function Compute trigger](docs/proof/alibaba-function-compute-trigger.png), and [public-trigger details](docs/proof/alibaba-function-compute-trigger-details.png). The live smoke response returned a matching Function Compute request ID; paid Log Service was deliberately not enabled.
 
 ## API surface
 
@@ -125,7 +126,7 @@ Authentic console screenshot, invocation log, matching Function Compute request 
 | `POST /api/agent/run` | Validates input, proxies to Function Compute, validates the Qwen result, and signs the agent receipt. |
 | `GET /api/deployment` | Returns sanitized provider, region, function, Git SHA, model, Qwen hostname, and Function Compute request ID. |
 | `POST /api/dispatch/session` | Verifies the agent receipt and explicit human decision; issues a plan/facility-bound approval token. |
-| `POST /api/dispatch/call` | Re-verifies Google evidence and the approval token before the controlled call or sandbox result. |
+| `POST /api/dispatch/call` | Re-verifies public facility evidence and the approval token before the controlled call or sandbox result. |
 | `GET /api/dispatch/status` | Returns redacted evidence normalized to accepted, not confirmed, or failed. |
 
 The existing auxiliary OpenAI speech/transcription and pictorial-guidance paths remain separate from the core Qwen orchestration.
@@ -155,10 +156,11 @@ PULSE_DISPATCH_SESSION_SECRET=replace-with-an-independent-long-random-value
 python3 -m venv .venv
 .venv/bin/pip install -r backend/requirements-dev.txt
 export DASHSCOPE_API_KEY=replace-me
-export GOOGLE_MAPS_API_KEY=replace-me
 export PULSE_AGENT_BACKEND_TOKEN=replace-with-the-same-backend-token
 .venv/bin/uvicorn backend.app:app --host 0.0.0.0 --port 9000
 ```
+
+`GOOGLE_MAPS_API_KEY` is optional. Without it, the Singapore demo uses the bundled OpenStreetMap snapshot dated `2026-07-20`; other locations can use `OVERPASS_API_URL` or `PULSE_FACILITY_SEARCH_URL`.
 
 Never place any credential in a `NEXT_PUBLIC_` variable. The inherited `.env.local` and Vercel linkage are intentionally absent from this clone.
 
@@ -179,7 +181,7 @@ PULSE_ALLOW_LIVE_AUDIT=true npm run test:prod-audit
 
 ## Built with
 
-Qwen Cloud · `qwen3.7-plus` · Alibaba Function Compute · FastAPI · Pydantic · httpx · Next.js 16 · React 19 · TypeScript · Google Places/Distance Matrix · Vapi · Twilio · OpenAI speech/image APIs · Vercel · Playwright · pytest
+Qwen Cloud · `qwen3.7-plus` · Alibaba Function Compute · FastAPI · Pydantic · httpx · Next.js 16 · React 19 · TypeScript · Google Places/Distance Matrix · OpenStreetMap · Vapi · Twilio · OpenAI speech/image APIs · Vercel · Playwright · pytest
 
 ## Existing-work disclosure and limitations
 
@@ -190,7 +192,8 @@ New work in this repository includes the Qwen Cloud reasoning/tool loop, determi
 Limitations:
 
 - demo reports are fictional and contain no real patient data;
-- public Google listings cannot prove capacity, clinical capability, beds, or acceptance;
+- public Google or OpenStreetMap listings cannot prove capacity, clinical capability, beds, or acceptance;
+- the no-billing Singapore fallback is an OpenStreetMap snapshot dated `2026-07-20`, not a claim of live facility status;
 - this prototype is not a medical device, dispatch service, or replacement for local emergency services;
 - authentic Qwen and Alibaba proof is never simulated or backfilled.
 

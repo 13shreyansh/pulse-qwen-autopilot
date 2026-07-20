@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
   <title id="title">Pulse Qwen Autopilot architecture</title>
-  <desc id="desc">A bystander uses the Pulse Vercel application. A protected proxy calls an Alibaba Function Compute FastAPI service, where Qwen orchestrates deterministic safety, Google care-search, and handoff tools. A signed human approval gate is required before a controlled call or sandbox outcome.</desc>
+  <desc id="desc">A bystander uses the Pulse Vercel application. A protected proxy calls an Alibaba Function Compute FastAPI service, where Qwen orchestrates deterministic safety, sourced care-search, and handoff tools. A signed human approval gate is required before a controlled call or sandbox outcome.</desc>
   <defs>
     <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
       <stop offset="0" stop-color="#f8fbff"/>
@@ -32,7 +32,7 @@
   <g filter="url(#shadow)"><rect x="100" y="430" width="300" height="112" rx="16" fill="#fff8ed" stroke="#e8ba76"/><text x="250" y="466" text-anchor="middle" class="node-title">Qwen Cloud</text><text x="250" y="492" text-anchor="middle" class="node-sub">qwen3.7-plus</text><text x="250" y="518" text-anchor="middle" class="node-sub">reasoning + tool orchestration</text></g>
   <g filter="url(#shadow)"><rect x="510" y="414" width="350" height="144" rx="16" fill="#f5f8fc" stroke="#9fb6cf"/><text x="685" y="450" text-anchor="middle" class="node-title">Allowlisted tool dispatcher</text><text x="685" y="477" text-anchor="middle" class="node-sub">Pydantic validation · 5 rounds max</text><text x="685" y="502" text-anchor="middle" class="node-sub">40 s budget · one transient retry</text><text x="685" y="527" text-anchor="middle" class="node-sub">canonical SHA-256 result hashes</text></g>
   <g><rect x="980" y="404" width="470" height="62" rx="14" fill="#eef9f2" stroke="#9dc9ad"/><text x="1215" y="432" text-anchor="middle" class="node-title">Deterministic safety protocol</text><text x="1215" y="453" text-anchor="middle" class="node-sub">Qwen selects; code owns instructions</text></g>
-  <g><rect x="980" y="484" width="470" height="62" rx="14" fill="#eef4ff" stroke="#9eb9dd"/><text x="1215" y="512" text-anchor="middle" class="node-title">Google care evidence</text><text x="1215" y="533" text-anchor="middle" class="node-sub">real IDs · distance · travel time · source URL</text></g>
+  <g><rect x="980" y="484" width="470" height="62" rx="14" fill="#eef4ff" stroke="#9eb9dd"/><text x="1215" y="512" text-anchor="middle" class="node-title">Sourced care evidence</text><text x="1215" y="533" text-anchor="middle" class="node-sub">Google or dated OSM · real IDs · source URLs</text></g>
   <g><rect x="980" y="564" width="470" height="74" rx="14" fill="#f8f5ff" stroke="#baa9dc"/><text x="1215" y="592" text-anchor="middle" class="node-title">Verified handoff + plan</text><text x="1215" y="615" text-anchor="middle" class="node-sub">searched facility only · deterministic plan hash</text></g>
   <path d="M400 486 H510" class="edge"/><path d="M860 458 H980" class="edge"/><path d="M860 486 H940 V515 H980" class="edge"/><path d="M860 516 H920 V601 H980" class="edge"/>
   <text x="250" y="580" text-anchor="middle" class="small">No approval or call tool exists</text>
