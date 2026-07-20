@@ -1,6 +1,6 @@
 "use client";
 
-import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type RefObject, useEffect, useMemo, useRef, useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
   AlertTriangle,
@@ -24,8 +24,10 @@ import {
   ShieldCheck,
   Siren,
 } from "lucide-react";
+import { QwenCoordinatingScreen, QwenPlanApprovalScreen } from "@/components/qwen-agent-panels";
+import type { AgentRunResult } from "@/lib/agent-types";
 
-type AppStep = "start" | "listen" | "confirm" | "sending" | "done";
+type AppStep = "start" | "listen" | "confirm" | "coordinating" | "approve" | "sending" | "done";
 type LocationState = "idle" | "locking" | "locked" | "unavailable";
 type SpeechState = "idle" | "connecting" | "listening" | "processing" | "unsupported" | "error";
 type MicState = "idle" | "requesting" | "granted" | "denied" | "unavailable";
@@ -52,7 +54,7 @@ type TriageResult = {
   watchFor: string[];
   infographicBrief: string;
   dispatchBrief: string;
-  source: "openai" | "local_fallback";
+  source: "openai" | "local_fallback" | "qwen";
 };
 
 type InfographicResult = {
@@ -146,6 +148,7 @@ type HospitalCandidate = {
   rankingReason: string;
   mapsUrl: string;
   source: "google_places";
+  availabilityStatus?: "unknown_until_confirmed";
 };
 
 type CoordinationCallAttempt = {
@@ -187,16 +190,6 @@ const statusSteps: Array<{ phase: SendPhase; label: string }> = [
   { phase: "calling_help", label: "Calling for help" },
 ];
 
-const MAX_DISPATCH_CALL_ATTEMPTS = 3;
-const RETRYABLE_CALL_FAILURES = [
-  "busy",
-  "no-answer",
-  "did-not-answer",
-  "customer-busy",
-  "customer-did-not-answer",
-  "customer-cancelled",
-  "customer-rejected",
-];
 const MAX_LOCATION_ACCURACY_METERS = 3000;
 
 function formatLocationLabel(location: IncidentLocation) {
@@ -361,12 +354,6 @@ function phaseIndex(phase: SendPhase) {
   if (phase === "failed") return -1;
   const index = statusSteps.findIndex((step) => step.phase === phase);
   return index >= 0 ? index : -1;
-}
-
-function isRetryableCallFailure(reason?: string) {
-  if (!reason) return false;
-  const normalized = reason.toLowerCase();
-  return RETRYABLE_CALL_FAILURES.some((retryableReason) => normalized.includes(retryableReason));
 }
 
 function getHelpStatus(dispatchCall: DispatchCall, sendPhase: SendPhase) {
@@ -559,6 +546,9 @@ export default function Home() {
   const [submittedReport, setSubmittedReport] = useState("");
   const [triageResult, setTriageResult] = useState<TriageResult | null>(null);
   const [dispatchCall, setDispatchCall] = useState<DispatchCall>({ status: "idle" });
+  const [agentRun, setAgentRun] = useState<AgentRunResult | null>(null);
+  const [selectedFacilityId, setSelectedFacilityId] = useState("");
+  const [overrideReason, setOverrideReason] = useState("");
   const [incidentLocation, setIncidentLocation] = useState<IncidentLocation | null>(null);
   const [hospitals, setHospitals] = useState<HospitalCandidate[]>([]);
   const [locationState, setLocationState] = useState<LocationState>("idle");
@@ -587,30 +577,9 @@ export default function Home() {
   const audioMeterFrameRef = useRef<number | null>(null);
   const silenceTimerRef = useRef<number | null>(null);
   const realtimeReconnectsRef = useRef(0);
-  const retryingCallIdRef = useRef<string | null>(null);
-  const dispatchContextRef = useRef<{
-    submittedReport: string;
-    triage: TriageResult | null;
-    incidentLocation: IncidentLocation | null;
-    hospitals: HospitalCandidate[];
-  }>({
-    submittedReport: "",
-    triage: null,
-    incidentLocation: null,
-    hospitals: [],
-  });
 
   const fallbackTriage = useMemo(() => analyzeReport(submittedReport || report), [report, submittedReport]);
   const triage = triageResult ?? fallbackTriage;
-
-  useEffect(() => {
-    dispatchContextRef.current = {
-      submittedReport,
-      triage,
-      incidentLocation,
-      hospitals,
-    };
-  }, [submittedReport, triage, incidentLocation, hospitals]);
 
   useEffect(() => {
     if (step === "listen") {
@@ -626,6 +595,9 @@ export default function Home() {
     setSubmittedReport("");
     setTriageResult(null);
     setDispatchCall({ status: "idle" });
+    setAgentRun(null);
+    setSelectedFacilityId("");
+    setOverrideReason("");
     setHospitals([]);
     setSendPhase("idle");
     setSilenceNotice("");
@@ -638,7 +610,6 @@ export default function Home() {
     committedSpeechRef.current = "";
     interimSpeechRef.current = "";
     realtimeReconnectsRef.current = 0;
-    retryingCallIdRef.current = null;
     setLocationError("");
     setIncidentLocation(null);
     setLocationState("locking");
@@ -700,89 +671,62 @@ export default function Home() {
   async function submitCapturedReport(value = report) {
     const cleaned = value.trim();
     if (cleaned.length < 12) return;
+    if (!incidentLocation) {
+      setLocationError("Location is needed before Qwen can search nearby care.");
+      setStep("start");
+      return;
+    }
     shouldListenRef.current = false;
     setSpeechState("processing");
     stopRealtimeCapture();
     setSubmittedReport(cleaned);
-    setSendPhase("sharing_location");
-    setTriageResult(null);
+    const immediateGuidance = analyzeReport(cleaned);
+    setTriageResult(immediateGuidance);
     setDispatchCall({ status: "idle" });
-    retryingCallIdRef.current = null;
-    setStep("sending");
-
-    let resolvedTriage = analyzeReport(cleaned);
+    setAgentRun(null);
+    setSelectedFacilityId("");
+    setOverrideReason("");
+    setHospitals([]);
+    setStep("coordinating");
     setSendPhase("preparing_brief");
+    loadGuidanceImage(cleaned, immediateGuidance);
+
     try {
-      const response = await fetch("/api/triage", {
+      const response = await fetch("/api/agent/run", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ transcript: cleaned }),
+        body: JSON.stringify({
+          report: cleaned,
+          location: {
+            latitude: incidentLocation.latitude,
+            longitude: incidentLocation.longitude,
+            accuracyMeters: incidentLocation.accuracy,
+          },
+          mode: "live",
+        }),
       });
+      const payload = (await response.json().catch(() => null)) as (AgentRunResult & { error?: string }) | null;
+      if (!response.ok || !payload?.agentReceipt || !payload.plan?.selectedFacilityId) {
+        throw new Error(payload?.error || "Qwen coordination could not be completed.");
+      }
+      const chosenHospital = payload.facilities.find((facility) => facility.id === payload.plan.selectedFacilityId);
+      if (!chosenHospital) throw new Error("Qwen returned a plan without sourced facility evidence.");
 
-      if (!response.ok) throw new Error("Brief preparation failed");
-      const data = (await response.json()) as { triage: TriageResult };
-      resolvedTriage = data.triage;
-      setTriageResult(resolvedTriage);
-    } catch {
-      setTriageResult(resolvedTriage);
-    }
-
-    loadGuidanceImage(cleaned, resolvedTriage);
-
-    try {
-      setSendPhase("finding_care");
-      const hospitalSearch = await loadNearbyHospitals();
-      const chosenHospital = hospitalSearch.hospitals[0];
-      if (!chosenHospital) throw new Error("No emergency care was found nearby.");
+      setAgentRun(payload);
+      setTriageResult(payload.protocol);
+      setHospitals(payload.facilities);
+      setSelectedFacilityId(chosenHospital.id);
       setSpeechState("idle");
-      setSendPhase("sending_brief");
-      await startDispatchCall(cleaned, resolvedTriage, chosenHospital, hospitalSearch.incidentLocation, 0, {
-        hospitalsForCall: hospitalSearch.hospitals,
-      });
+      setSendPhase("finding_care");
+      setStep("approve");
     } catch (error) {
       setSpeechState("idle");
       setSendPhase("failed");
       setStep("done");
       setDispatchCall({
         status: "failed",
-        error: error instanceof Error ? error.message : "We could not complete the call. Keep following the safety steps and try again.",
+        error: `${error instanceof Error ? error.message : "Qwen coordination failed."} Deterministic safety guidance is shown; no call was placed.`,
       });
-    }
-  }
-
-  async function loadNearbyHospitals() {
-    if (!incidentLocation) {
-      throw new Error("Location is needed to send help to the right place.");
-    }
-
-    const params = new URLSearchParams({
-      lat: String(incidentLocation.latitude),
-      lng: String(incidentLocation.longitude),
-    });
-
-    try {
-      const response = await fetch(`/api/hospitals?${params.toString()}`);
-      if (!response.ok) throw new Error("Emergency care search failed");
-      const data = (await response.json()) as {
-        incidentLocation: IncidentLocation;
-        hospitals: HospitalCandidate[];
-        source?: "google_places" | "unavailable";
-      };
-      const resolvedLocation = {
-        ...incidentLocation,
-        ...data.incidentLocation,
-        accuracy: incidentLocation.accuracy,
-      };
-      if (data.hospitals.length === 0) throw new Error("No emergency care was found nearby.");
-      setIncidentLocation(resolvedLocation);
-      setHospitals(data.hospitals);
-      return {
-        incidentLocation: resolvedLocation,
-        hospitals: data.hospitals,
-      };
-    } catch (error) {
-      setHospitals([]);
-      throw error instanceof Error ? error : new Error("Emergency care search failed");
     }
   }
 
@@ -829,43 +773,58 @@ export default function Home() {
     }
   }
 
-  async function createDispatchSessionToken(reportForToken: string) {
+  async function createDispatchSessionToken(
+    reportForToken: string,
+    run: AgentRunResult,
+    facilityId: string,
+    reason: string,
+  ) {
+    const isOverride = facilityId !== run.plan.selectedFacilityId;
     const response = await fetch("/api/dispatch/session", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ report: reportForToken }),
+      body: JSON.stringify({
+        report: reportForToken,
+        agentRunId: run.runId,
+        planId: run.plan.id,
+        planHash: run.plan.planHash,
+        selectedFacilityId: facilityId,
+        agentReceipt: run.agentReceipt,
+        explicitApproval: true,
+        decision: isOverride ? "override" : "approve",
+        overrideReason: isOverride ? reason.trim() : undefined,
+      }),
     });
-    const data = (await response.json().catch(() => null)) as { token?: string } | null;
+    const data = (await response.json().catch(() => null)) as { token?: string; error?: string } | null;
     if (!response.ok || !data?.token) {
-      throw new Error("Pulse could not prepare a secure help request. Try again.");
+      throw new Error(data?.error || "Pulse could not record the approval. Try again.");
     }
     return data.token;
   }
 
-  const startDispatchCall = useCallback(async (
+  async function startDispatchCall(
     transcript: string,
     triageForCall: TriageResult,
+    run: AgentRunResult,
     hospital: HospitalCandidate,
     readableLocation: IncidentLocation,
     hospitalIndex: number,
-    options: {
-      attempt?: number;
-      messageAlreadySent?: boolean;
-      hospitalsForCall?: HospitalCandidate[];
-    } = {},
-  ) => {
-    const attempt = options.attempt ?? 1;
-    const hospitalsForCall = options.hospitalsForCall ?? hospitals;
+    reason: string,
+  ) {
+    const attempt = 1;
+    const messageAlreadySent = dispatchCall.operatorMessage?.status === "sent";
+    setStep("sending");
+    setSendPhase("sending_brief");
     setDispatchCall({
       status: "starting",
       attempt,
       hospitalName: hospital.name,
       hospitalIndex,
-      messageAlreadySent: options.messageAlreadySent,
+      messageAlreadySent,
     });
 
     try {
-      const dispatchSessionToken = await createDispatchSessionToken(transcript);
+      const dispatchSessionToken = await createDispatchSessionToken(transcript, run, hospital.id, reason);
       const response = await fetch("/api/dispatch/call", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -874,9 +833,13 @@ export default function Home() {
           triage: triageForCall,
           incidentLocation: readableLocation,
           hospital,
-          hospitals: hospitalsForCall,
-          messageAlreadySent: options.messageAlreadySent,
+          hospitals,
+          messageAlreadySent,
           dispatchSessionToken,
+          agentRunId: run.runId,
+          planId: run.plan.id,
+          planHash: run.plan.planHash,
+          selectedFacilityId: hospital.id,
         }),
       });
 
@@ -908,7 +871,7 @@ export default function Home() {
 	        verificationOnly: data.verificationOnly,
 	        hospitalName: hospital.name,
 	        hospitalIndex,
-	        messageAlreadySent: options.messageAlreadySent,
+	        messageAlreadySent,
 	        selectedDestination: data.selectedDestination || data.coordinationSession?.selectedDestination,
 	        handoffStatus: nextHandoffStatus,
 	        coordinationSession: data.coordinationSession,
@@ -927,13 +890,13 @@ export default function Home() {
         attempt,
         hospitalName: hospital.name,
         hospitalIndex,
-        messageAlreadySent: options.messageAlreadySent,
+        messageAlreadySent,
         error: error instanceof Error ? error.message : "We could not complete the call. Call local emergency services now.",
       });
       setSendPhase("failed");
       setStep("done");
     }
-  }, [hospitals]);
+  }
 
   useEffect(() => {
     if (dispatchCall.verificationOnly || !dispatchCall.statusToken || dispatchCall.status === "ended" || dispatchCall.status === "failed") {
@@ -949,7 +912,6 @@ export default function Home() {
 	          status?: DispatchCall["status"];
 	          handoffStatus?: CoordinationHandoffStatus;
 	          facilityResponses?: FacilityResponse[];
-	          retryable?: boolean;
 	        };
 	        setDispatchCall((current) => ({
 	          ...current,
@@ -969,38 +931,10 @@ export default function Home() {
 	          setStep("done");
         }
         if (data.status === "failed") {
-	          const currentAttempt = dispatchCall.attempt ?? 1;
-	          const nextAttempt = currentAttempt + 1;
-	          const context = dispatchContextRef.current;
-	          const hospitalIndex = dispatchCall.hospitalIndex ?? 0;
-	          const nextHospitalIndex = Math.min(hospitalIndex + 1, Math.max(context.hospitals.length - 1, 0));
-	          const hospital = context.hospitals[nextHospitalIndex] ?? context.hospitals[hospitalIndex] ?? context.hospitals[0];
-	          if (
-	            dispatchCall.statusToken &&
-	            retryingCallIdRef.current !== dispatchCall.statusToken &&
-	            (data.retryable || isRetryableCallFailure(dispatchCall.diagnosticCode || dispatchCall.endedReason)) &&
-            currentAttempt < MAX_DISPATCH_CALL_ATTEMPTS &&
-            context.submittedReport &&
-            context.triage &&
-            context.incidentLocation &&
-            hospital
-          ) {
-            retryingCallIdRef.current = dispatchCall.statusToken;
-            setSendPhase("calling_help");
-            await startDispatchCall(
-              context.submittedReport,
-	              context.triage,
-	              hospital,
-	              context.incidentLocation,
-	              nextHospitalIndex,
-	              {
-	                attempt: nextAttempt,
-	                messageAlreadySent: true,
-	                hospitalsForCall: context.hospitals,
-              },
-            );
-            return;
-          }
+          setDispatchCall((current) => ({
+            ...current,
+            error: current.error || "This call was not confirmed. Review the next option and approve again before another attempt.",
+          }));
           setSendPhase("failed");
           setStep("done");
         }
@@ -1011,14 +945,9 @@ export default function Home() {
 
     return () => window.clearInterval(timer);
   }, [
-    dispatchCall.attempt,
     dispatchCall.statusToken,
-    dispatchCall.diagnosticCode,
-    dispatchCall.endedReason,
-    dispatchCall.hospitalIndex,
     dispatchCall.verificationOnly,
     dispatchCall.status,
-    startDispatchCall,
   ]);
 
   async function requestMicrophoneAccess() {
@@ -1280,6 +1209,9 @@ export default function Home() {
     setSubmittedReport("");
     setTriageResult(null);
     setDispatchCall({ status: "idle" });
+    setAgentRun(null);
+    setSelectedFacilityId("");
+    setOverrideReason("");
     setIncidentLocation(null);
     setHospitals([]);
     setSpeechState("idle");
@@ -1298,6 +1230,31 @@ export default function Home() {
     committedSpeechRef.current = "";
     interimSpeechRef.current = "";
     realtimeReconnectsRef.current = 0;
+  }
+
+  async function approveCoordinationPlan() {
+    if (!agentRun || !incidentLocation) return;
+    const hospitalIndex = hospitals.findIndex((hospital) => hospital.id === selectedFacilityId);
+    const hospital = hospitals[hospitalIndex];
+    if (!hospital) return;
+    await startDispatchCall(
+      submittedReport,
+      triage,
+      agentRun,
+      hospital,
+      incidentLocation,
+      hospitalIndex,
+      overrideReason,
+    );
+  }
+
+  function reviewNextFacility() {
+    if (!agentRun || hospitals.length < 2) return;
+    const currentIndex = Math.max(hospitals.findIndex((hospital) => hospital.id === selectedFacilityId), 0);
+    const nextHospital = hospitals[(currentIndex + 1) % hospitals.length];
+    setSelectedFacilityId(nextHospital.id);
+    setOverrideReason("");
+    setStep("approve");
   }
 
   function addNewDetail() {
@@ -1375,6 +1332,26 @@ export default function Home() {
             />
           )}
 
+          {step === "coordinating" && (
+            <QwenCoordinatingScreen
+              report={submittedReport}
+              warning={triage.warning}
+              actions={triage.actions}
+            />
+          )}
+
+          {step === "approve" && agentRun && (
+            <QwenPlanApprovalScreen
+              agentRun={agentRun}
+              selectedFacilityId={selectedFacilityId}
+              overrideReason={overrideReason}
+              onSelectFacility={setSelectedFacilityId}
+              onOverrideReason={setOverrideReason}
+              onApprove={() => void approveCoordinationPlan()}
+              approving={dispatchCall.status === "starting"}
+            />
+          )}
+
           {step === "sending" && (
             <SendingScreen
                 guidanceImage={guidanceImage}
@@ -1393,6 +1370,7 @@ export default function Home() {
               hospitals={hospitals}
               incidentLocation={incidentLocation}
               onAddDetail={addNewDetail}
+              onReviewNextOption={agentRun && hospitals.length > 1 ? reviewNextFacility : undefined}
               onReset={reset}
               sendPhase={sendPhase}
               triage={triage}
@@ -1847,6 +1825,7 @@ function HelpNotifiedScreen({
   hospitals,
   incidentLocation,
   onAddDetail,
+  onReviewNextOption,
   onReset,
   sendPhase,
   triage,
@@ -1856,6 +1835,7 @@ function HelpNotifiedScreen({
   hospitals: HospitalCandidate[];
   incidentLocation: IncidentLocation | null;
   onAddDetail: () => void;
+  onReviewNextOption?: () => void;
   onReset: () => void;
   sendPhase: SendPhase;
   triage: TriageResult;
@@ -1890,6 +1870,15 @@ function HelpNotifiedScreen({
         </details>
 
         <div className="grid gap-3">
+          {isFailure && onReviewNextOption && (
+            <button
+              type="button"
+              onClick={onReviewNextOption}
+              className="min-h-14 rounded-lg bg-[#2563eb] px-4 text-sm font-semibold text-white transition hover:bg-[#1d4ed8] focus:outline-none focus:ring-4 focus:ring-[rgba(37,99,235,0.14)]"
+            >
+              Review next care option
+            </button>
+          )}
           <button
             type="button"
             onClick={onAddDetail}

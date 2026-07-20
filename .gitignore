@@ -3,8 +3,14 @@
 .vercel/
 .next/
 node_modules/
+.venv/
+__pycache__/
+.pytest_cache/
+*.pyc
 out/
+dist/
 *.log
 tsconfig.tsbuildinfo
 test-results/
 playwright-report/
+.vercel

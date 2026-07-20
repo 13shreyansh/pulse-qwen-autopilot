@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { checkDispatchCooldown, getClientKey, issueStatusToken, verifyDispatchSession } from "@/lib/dispatch-session";
+import { checkDispatchCooldown, getClientKey, issueStatusToken, verifyApprovedDispatchSession } from "@/lib/dispatch-session";
 import { rateLimit } from "@/lib/rate-limit";
 import { getResponseLinePhone } from "@/lib/response-line";
 
@@ -44,6 +44,10 @@ type DispatchRequest = {
   hospitals?: HospitalCandidate[];
   messageAlreadySent?: boolean;
   dispatchSessionToken?: string;
+  agentRunId?: string;
+  planId?: string;
+  planHash?: string;
+  selectedFacilityId?: string;
 };
 
 type CoordinationHandoffStatus =
@@ -906,6 +910,11 @@ async function verifiedHospitalPackage(request: NextRequest, body: DispatchReque
     throw new Error(data?.error || "Verified Google hospital search failed.");
   }
 
+  const selectedHospital = data.hospitals.find((hospital) => hospital.id === body.selectedFacilityId);
+  if (!selectedHospital) {
+    throw new Error("The approved facility is no longer present in verified search results.");
+  }
+
   return {
     ...body,
     incidentLocation: {
@@ -914,7 +923,7 @@ async function verifiedHospitalPackage(request: NextRequest, body: DispatchReque
       label: data.incidentLocation?.label || body.incidentLocation?.label || "Current GPS location",
       accuracy: body.incidentLocation?.accuracy,
     },
-    hospital: data.hospitals[0],
+    hospital: selectedHospital,
     hospitals: data.hospitals,
   } satisfies DispatchRequest;
 }
@@ -932,8 +941,15 @@ export async function POST(request: NextRequest) {
   }
 
   const clientKey = getClientKey(request);
-  if (!verifyDispatchSession(requestBody.dispatchSessionToken, clientKey, transcript)) {
-    return NextResponse.json({ error: "Pulse needs a fresh dispatch session before calling for help." }, { status: 403 });
+  if (!verifyApprovedDispatchSession(requestBody.dispatchSessionToken, {
+    clientKey,
+    report: transcript,
+    runId: requestBody.agentRunId,
+    planId: requestBody.planId,
+    planHash: requestBody.planHash,
+    facilityId: requestBody.selectedFacilityId,
+  })) {
+    return NextResponse.json({ error: "Pulse needs a fresh human-approved Qwen plan before calling for help." }, { status: 403 });
   }
 
   if (!requestBody.messageAlreadySent) {

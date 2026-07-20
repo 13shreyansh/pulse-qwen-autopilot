@@ -1,0 +1,16 @@
+flowchart LR
+    U["Bystander or judge"] --> V["Pulse Next.js app<br/>New Vercel project"]
+    V --> P["Protected /api/agent/run proxy<br/>schema validation + receipt signing"]
+    P --> F["Alibaba Function Compute<br/>FastAPI · Singapore"]
+    F --> Q["Qwen Cloud<br/>qwen3.7-plus"]
+    F --> T["Allowlisted deterministic tools"]
+    T --> S["Conservative emergency protocols"]
+    T --> G["Google Places + travel time"]
+    T --> H["Facility-bound handoff + SHA-256 plan"]
+    H --> R["Qwen structured recommendation"]
+    R --> A["Human-only approval gate<br/>signed plan + facility token"]
+    A --> C["Controlled Vapi/Twilio call<br/>or public sandbox outcome"]
+    C --> O["accepted · not_confirmed · failed"]
+
+    Q -. "cannot approve or call" .-> A
+    G -. "listing ≠ availability" .-> A

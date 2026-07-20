@@ -67,6 +67,43 @@ const hospitals = [
   },
 ];
 
+const agentRun = {
+  runId: "run-test-1",
+  model: "qwen3.7-plus",
+  qwenRequestId: "qwen-request-test-1",
+  fcRequestId: "fc-request-test-1",
+  latencyMs: 842,
+  protocol: { ...triage, source: "qwen", policyValidated: true, policyOverride: false },
+  facilities: hospitals.map((hospital) => ({ ...hospital, availabilityStatus: "unknown_until_confirmed" })),
+  plan: {
+    id: "plan-test-1",
+    selectedFacilityId: hospitals[0].id,
+    selectedFacility: { ...hospitals[0], availabilityStatus: "unknown_until_confirmed" },
+    handoffBrief: triage.dispatchBrief,
+    protocolType: triage.emergencyType,
+    reportHash: "report-hash-test",
+    planHash: "plan-hash-test",
+    rationale: "Nearest sourced emergency-care listing with a public phone number.",
+    humanActionRequired: "Review and approve before any message or controlled call.",
+  },
+  toolTrace: [
+    ["get_emergency_protocol", "Selected bounded protocol"],
+    ["search_nearby_care", "Returned 2 sourced facility listings"],
+    ["prepare_verified_handoff", "Prepared a facility-bound handoff"],
+    ["submit_coordination_plan", "Submitted recommendation for human approval"],
+  ].map(([tool, resultSummary], index) => ({
+    index: index + 1,
+    tool,
+    arguments: {},
+    resultSummary,
+    resultHash: `${index + 1}`.repeat(64),
+    durationMs: 4,
+  })),
+  humanActionRequired: "Review and approve before any message or controlled call.",
+  agentReceipt: "signed-agent-receipt",
+  fallbackUsed: false,
+};
+
 function coordinationSession(handoffStatus: "accepted" | "not_confirmed" | "calling") {
   return {
     id: "coord-test",
@@ -193,6 +230,9 @@ async function mockIntake(page: Page, handoffStatus: "accepted" | "not_confirmed
       body: JSON.stringify({ token: "test-session-token", expiresInSeconds: 600 }),
     });
   });
+  await page.route("**/api/agent/run", async (route) => {
+    await route.fulfill({ contentType: "application/json", body: JSON.stringify(agentRun) });
+  });
   await page.route("**/api/triage", async (route) => {
     await route.fulfill({ contentType: "application/json", body: JSON.stringify({ triage }) });
   });
@@ -267,6 +307,12 @@ test("mobile panic flow shows guidance before dispatch and accepted help evidenc
 
   await page.getByRole("button", { name: "Send for help" }).click();
 
+  await expect(page.getByRole("heading", { name: "Review before Pulse contacts anyone" })).toBeVisible({ timeout: 20000 });
+  expect(mocks.getDispatchRequests()).toBe(0);
+  await expect(page.getByText("Qwen Incident Coordinator")).toBeVisible();
+  await expect(page.getByText("fc-request-test-1")).toBeVisible();
+  await page.getByRole("button", { name: "Approve plan and contact controlled line" }).click();
+
   await expect(page.getByRole("heading", { name: "Help is ready to receive them." })).toBeVisible({ timeout: 20000 });
   expect(mocks.getDispatchRequests()).toBe(1);
   await expect(page.getByText("Details", { exact: true })).toBeVisible();
@@ -293,6 +339,10 @@ test("mobile panic flow does not overstate an unconfirmed handoff", async ({ pag
   await expect(page.getByRole("heading", { name: "This is what I heard." })).toBeVisible({ timeout: 15000 });
   expect(mocks.getDispatchRequests()).toBe(0);
   await page.getByRole("button", { name: "Send for help" }).click();
+
+  await expect(page.getByRole("heading", { name: "Review before Pulse contacts anyone" })).toBeVisible({ timeout: 20000 });
+  expect(mocks.getDispatchRequests()).toBe(0);
+  await page.getByRole("button", { name: "Approve plan and contact controlled line" }).click();
 
   await expect(page.getByRole("heading", { name: "Help was not confirmed." })).toBeVisible({ timeout: 20000 });
   expect(mocks.getDispatchRequests()).toBe(1);

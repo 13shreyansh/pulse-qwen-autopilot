@@ -1,453 +1,197 @@
-# Pulse Emergency
+# Pulse Qwen Autopilot
 
 <p align="center">
-  <img src="public/pulse-emergency-logo-512.png" alt="Pulse Emergency logo" width="140" />
+  <img src="public/pulse-emergency-logo-512.png" alt="Pulse logo" width="128" />
 </p>
 
 <p align="center">
-  <strong>Bystander-first emergency guidance, location handoff, nearby-care discovery, and evidence-based help-contact status for the first critical minute.</strong>
+  <strong>An auditable Qwen incident coordinator that turns a stressed bystander’s ambiguous emergency report into sourced nearby-care evidence and a constraint-checked plan—then stops for human approval before contacting anyone.</strong>
 </p>
 
 <p align="center">
-  <a href="https://pulse-beta-two.vercel.app"><strong>Live App</strong></a>
-  ·
-  <a href="docs/DEMO.md">Demo Script</a>
-  ·
-  <a href="docs/ARCHITECTURE.md">Architecture</a>
-  ·
-  <a href="docs/SAFETY_AND_EVALUATION.md">Safety</a>
-  ·
-  <a href="docs/JUDGE_READINESS.md">Judge Readiness</a>
+  <img alt="Qwen Cloud" src="https://img.shields.io/badge/Qwen%20Cloud-qwen3.7--plus-f59e0b" />
+  <img alt="Alibaba Function Compute" src="https://img.shields.io/badge/Alibaba%20Cloud-Function%20Compute-ff6a00" />
+  <img alt="Track 4" src="https://img.shields.io/badge/Track%204-Autopilot%20Agent-2563eb" />
+  <img alt="License" src="https://img.shields.io/badge/License-MIT-15803d" />
 </p>
 
-<p align="center">
-  <a href="https://github.com/13shreyansh/pulseguard/actions/workflows/ci.yml">
-    <img alt="CI" src="https://github.com/13shreyansh/pulseguard/actions/workflows/ci.yml/badge.svg" />
-  </a>
-  <img alt="Next.js 16" src="https://img.shields.io/badge/Next.js-16-black?logo=nextdotjs" />
-  <img alt="React 19" src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=111" />
-  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white" />
-  <img alt="Vercel" src="https://img.shields.io/badge/Deploy-Vercel-000000?logo=vercel" />
-</p>
+> Fictional emergency exercise using synthetic reports. Pulse is not emergency services and does not replace a call to the local emergency number.
 
-## Table Of Contents
+## Problem and impact
 
-- [Why Pulse Exists](#why-pulse-exists)
-- [What Pulse Does](#what-pulse-does)
-- [Live Product Flow](#live-product-flow)
-- [System Architecture](#system-architecture)
-- [AI And Provider Stack](#ai-and-provider-stack)
-- [Safety And Truth Guarantees](#safety-and-truth-guarantees)
-- [API Surface](#api-surface)
-- [Local Setup](#local-setup)
-- [Environment Contract](#environment-contract)
-- [Verification](#verification)
-- [Deployment](#deployment)
-- [Operations](#operations)
-- [Repository Quality Evidence](#repository-quality-evidence)
-- [Known Boundaries](#known-boundaries)
-- [Project Structure](#project-structure)
-- [Contributing](#contributing)
+In the first minute of an emergency, a bystander may be frightened, imprecise, and unsure which nearby facility can help. A conventional chatbot can sound confident while inventing medical instructions, facility capabilities, or acceptance.
 
-## Why Pulse Exists
+Pulse separates interpretation from facts:
 
-Emergency apps often ask a stressed bystander to make too many decisions too early: explain the incident perfectly, choose where to go, call multiple people, share location, and remember first-aid steps. Pulse is built around a different product principle:
+- Qwen interprets ambiguity and decides which bounded tool to call next.
+- Deterministic code owns conservative guidance, geospatial evidence, facility IDs, plan hashes, and approval enforcement.
+- Google Places supplies real public listings and travel-time evidence, never bed or readiness claims.
+- A human must approve a signed report–plan–facility receipt before any controlled external action.
+- Outcomes remain limited to `accepted`, `not_confirmed`, and `failed`.
 
-> The bystander should get immediate, calm guidance first. Coordination and provider work should happen in the background, and the UI should only claim what is actually confirmed.
+This makes the agent useful in a consequential workflow without pretending that an LLM is a dispatcher, clinician, or hospital.
 
-Pulse focuses on the first critical minute after an incident. It listens to what happened, locks the browser location, turns the report into simple actions, searches nearby emergency care, prepares a map-linked incident brief, contacts the configured response line, and reports whether help was accepted, unconfirmed, or failed.
+## Live demo
 
-Live app: [https://pulse-beta-two.vercel.app](https://pulse-beta-two.vercel.app)
+- New public app: deployment in progress at `pulse-qwen-autopilot.vercel.app`
+- Three-minute video: added after the authenticated cloud deployment is recorded
+- Track: **Track 4 — Autopilot Agent**
 
-Repository: [https://github.com/13shreyansh/pulseguard](https://github.com/13shreyansh/pulseguard)
+Public judging is sandboxed. The authentic recorded call is restricted to Pulse’s existing controlled response line; no hospital or emergency-service number is dialled.
 
-## What Pulse Does
+## What Qwen does
 
-Pulse combines a public bystander flow with protected internal diagnostics.
+The FastAPI agent runs `qwen3.7-plus` through the Qwen Cloud OpenAI-compatible endpoint. Qwen owns the reasoning loop and can invoke only four typed tools, in order:
 
-| Capability | What It Means |
-| --- | --- |
-| Bystander intake | The user can speak or type what happened in plain language. |
-| Location lock | Browser GPS is requested before intake so the help brief can include a usable map link. |
-| Realtime speech | OpenAI Realtime transcription captures live speech while the user speaks. |
-| Final transcript | Captured browser audio is finalized through a second transcription pass when available. |
-| Review before send | Nothing is shared or called until the bystander confirms the report. |
-| Emergency understanding | Structured triage converts the report into severity, warning, do-now steps, avoid steps, and watch-for signals. |
-| Visual guidance | A calm pictorial guide is generated when image generation is available, with deterministic fallback UI. |
-| Nearby-care discovery | Google Maps/Places and travel-time signals rank emergency-care options near the locked location. |
-| Incident brief | The report, location, map link, selected care option, and safety warning are sent to the configured response line. |
-| Live help contact | Vapi/Twilio-backed calling contacts the configured response line for the deployment. |
-| Evidence-based status | Public status is normalized into accepted, not confirmed, or failed without exposing raw transcripts. |
-| Protected diagnostics | Operational checks and safety lab routes are protected by `PULSE_OPS_TOKEN`. |
+1. `get_emergency_protocol` — selects one bounded protocol; deterministic policy returns the actual instructions.
+2. `search_nearby_care` — searches real Google public listings and travel-time evidence.
+3. `prepare_verified_handoff` — accepts only a facility ID emitted by the preceding search and creates a deterministic plan hash.
+4. `submit_coordination_plan` — accepts only that prepared plan and returns the structured recommendation for human review.
 
-## Live Product Flow
+There is deliberately no approval, message, or call tool. Unknown tools, malformed arguments, out-of-order tools, invented facility IDs, and unseen plan IDs are rejected server-side.
+
+The loop is bounded to five Qwen rounds, a 40-second total budget, temperature `0.1`, and one retry for `429`/`5xx` responses. Every validated tool result is canonicalized and SHA-256 hashed in the returned trace.
+
+Primary implementation: [backend/app.py](backend/app.py)
+
+## Architecture
+
+![Pulse Qwen Autopilot architecture](docs/architecture.png)
+
+The trust boundaries are intentional:
+
+- Browser secrets never exist; the Next.js route is a protected server-to-server proxy.
+- Function Compute owns Qwen and Google tool execution.
+- The Next.js proxy validates the entire agent response and signs the report hash, plan hash, recommended facility, and searched facility allowlist.
+- `/api/dispatch/session` verifies that receipt and records explicit approval.
+- `/api/dispatch/call` accepts only a dispatch token bound to the same client, report, Qwen run, plan, and selected facility.
+
+Editable diagram source: [docs/architecture.mmd](docs/architecture.mmd) · [SVG](docs/architecture.svg)
+
+## Human approval and safety boundaries
+
+The application state machine is:
 
 ```text
-Start Emergency Help
-  -> Lock browser location
-  -> Start realtime speech capture
-  -> Finalize transcript from captured audio
-  -> Bystander reviews and edits the report
-  -> Generate structured triage and safety guidance
-  -> Generate or fall back to pictorial guidance
-  -> Search and rank nearby emergency care
-  -> Issue short-lived dispatch session token
-  -> Send map-linked incident brief to response line
-  -> Start live help-contact call
-  -> Poll redacted status evidence
-  -> Show accepted, not confirmed, or failed
+start → listen → report review → Qwen coordinating → plan approval → contacting → result
 ```
 
-### User-Facing States
+Safety controls include:
 
-1. **Start**: simple emergency-first landing view with immediate safety reminder.
-2. **Listen**: speech or typed report with clear location and microphone state.
-3. **Review**: final report confirmation before any message or call action.
-4. **Sending**: immediate guidance remains visible while backend work runs.
-5. **Done**: final status is one of:
-   - `accepted`: call evidence supports that help can receive the case,
-   - `not_confirmed`: the call did not produce a clear yes,
-   - `failed`: the call or message path failed.
+- deterministic immediate guidance remains visible while Qwen works;
+- no external action occurs after transcript confirmation alone;
+- Qwen cannot approve or call;
+- public listings explicitly say availability is unconfirmed;
+- a facility override is allowed only for a facility returned by search and requires a written reason;
+- a failed attempt recommends another option but requires a fresh approval token;
+- modified receipts, report text, plan hashes, or facility IDs fail verification;
+- raw reports, exact GPS coordinates, phone numbers, API keys, and auth tokens are not written to agent logs;
+- Qwen failure returns `503` and labels deterministic guidance separately rather than impersonating a successful Qwen run.
 
-Pulse never tells the user that help is ready unless returned call evidence supports that result. If help is unconfirmed or failed, the UI keeps local-emergency-services guidance visible.
+## Evaluation and current evidence
 
-## System Architecture
+No live Qwen metric is claimed before the authenticated cloud evaluation runs. Current reproducible local evidence:
 
-Pulse is a Next.js 16 App Router application with public bystander routes and protected operations routes.
+| Suite | Result | What it checks |
+| --- | ---: | --- |
+| FastAPI agent tests | 9/9 passing | grounded sequence, invented IDs, malformed/out-of-order tools, five-round cap, retry/failure behavior, uncertain listing policy |
+| Agent proxy contract tests | 3/3 passing | exact tool order, SHA-256 fields, and selected-facility grounding |
+| Approval API tests | 3/3 passing | explicit approval, modified-plan rejection, written override reason |
+| Dispatch/receipt unit tests | 4/4 passing | client/report/plan/facility binding and encrypted status tokens |
+| Mobile product flows | 2/2 passing | no call before approval; accepted vs unconfirmed truthfulness |
+| Handoff inference tests | 4/4 passing | vague or negative language never becomes acceptance |
+| Frontend lint/build | passing | ESLint and Next.js production compilation |
 
-```text
-Browser
-  |-- public client UI
-  |-- WebRTC speech stream
-  |-- geolocation
-  |
-Next.js App Router
-  |-- /api/realtime/session
-  |-- /api/speech/finalize
-  |-- /api/triage
-  |-- /api/guidance/infographic
-  |-- /api/hospitals
-  |-- /api/dispatch/session
-  |-- /api/dispatch/call
-  |-- /api/dispatch/status
-  |-- protected /api/config/*
-  |-- protected /api/adaption/safety-lab
-  |
-External Services
-  |-- OpenAI Realtime + transcription + structured triage + image generation
-  |-- Google Maps/Places + Distance Matrix
-  |-- Twilio SMS / voice
-  |-- Vapi outbound calling
-  |-- optional signed message webhook
-```
+The live eight-scenario evaluation will be written to `evaluation/results/` directly from the deployed Function Compute endpoint. Its planned cases are major trauma, cardiac/breathing emergency, ambiguous stroke, missing location, no nearby care, approval bypass, Qwen outage, and a listing without a phone/current status. Actual results—not targets—will be published.
 
-Primary code paths:
+## Alibaba Cloud deployment proof
 
-- Public UI: [src/app/page.tsx](src/app/page.tsx)
-- Dispatch call route: [src/app/api/dispatch/call/route.ts](src/app/api/dispatch/call/route.ts)
-- Dispatch status route: [src/app/api/dispatch/status/route.ts](src/app/api/dispatch/status/route.ts)
-- Handoff inference: [src/lib/handoff.ts](src/lib/handoff.ts)
-- Dispatch session guard: [src/lib/dispatch-session.ts](src/lib/dispatch-session.ts)
-- Nearby-care search: [src/app/api/hospitals/route.ts](src/app/api/hospitals/route.ts)
-- Triage route: [src/app/api/triage/route.ts](src/app/api/triage/route.ts)
+The agent backend is designed for an Alibaba Function Compute Web Function:
 
-More detail: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- provider: Alibaba Cloud Function Compute;
+- region: Singapore (`ap-southeast-1`);
+- function: `pulse-qwen-agent`;
+- runtime: Python custom runtime, port `9000`;
+- command: `python3 -m uvicorn backend.app:app --host 0.0.0.0 --port 9000`;
+- public HTTPS trigger for `GET`, `POST`, and `OPTIONS`;
+- sanitized metadata: `GET /api/deployment`.
 
-## AI And Provider Stack
+Authentic console screenshot, invocation log, matching Function Compute request ID, and public deployment response are added only after the resource exists. See [docs/ALIBABA_DEPLOYMENT.md](docs/ALIBABA_DEPLOYMENT.md).
 
-| Layer | Implementation |
+## API surface
+
+| Route | Purpose |
 | --- | --- |
-| App framework | Next.js 16 App Router |
-| UI | React 19, TypeScript, Tailwind CSS 4 |
-| Speech intake | OpenAI Realtime transcription over WebRTC |
-| Final transcription | OpenAI audio transcription endpoint |
-| Emergency reasoning | OpenAI JSON-mode structured triage with conservative fallback |
-| Pictorial guidance | OpenAI image generation with deterministic fallback |
-| Nearby-care search | Google Maps/Places and optional travel-time enrichment |
-| Message path | Twilio SMS or signed HTTPS webhook |
-| Live call path | Vapi or Twilio, routed through deployment response line |
-| Hosting | Vercel |
-| Verification | ESLint, Next production build, Playwright mocked product flow |
+| `POST /api/agent/run` | Validates input, proxies to Function Compute, validates the Qwen result, and signs the agent receipt. |
+| `GET /api/deployment` | Returns sanitized provider, region, function, Git SHA, model, Qwen hostname, and Function Compute request ID. |
+| `POST /api/dispatch/session` | Verifies the agent receipt and explicit human decision; issues a plan/facility-bound approval token. |
+| `POST /api/dispatch/call` | Re-verifies Google evidence and the approval token before the controlled call or sandbox result. |
+| `GET /api/dispatch/status` | Returns redacted evidence normalized to accepted, not confirmed, or failed. |
 
-## Safety And Truth Guarantees
+The existing auxiliary OpenAI speech/transcription and pictorial-guidance paths remain separate from the core Qwen orchestration.
 
-Pulse is built for a high-stress emergency domain, so the repository prioritizes conservative claims and explicit boundaries.
+## Local setup
 
-### Product Safety
-
-- GPS is requested before intake begins.
-- Transcript review is required before message or call actions.
-- Public dispatch requires a short-lived session token bound to the client and reviewed report.
-- Public dispatch has a browser/IP cooldown and route-level rate limits.
-- Public status responses are normalized and redacted behind encrypted status tokens.
-- Public UI avoids internal service names, call IDs, readiness labels, and implementation jargon.
-- Unconfirmed handoff states do not render as accepted.
-- Routine tests cannot place live calls or messages.
-- Production audit is skipped unless `PULSE_ALLOW_LIVE_AUDIT=true`.
-- Redis-backed durable rate limits are used when rate-limit Redis variables are configured; local development falls back to per-instance memory.
-
-### Bystander Safety
-
-- Pulse keeps immediate actions visible while background work runs.
-- The UI says to call local emergency services when danger is immediate or help is not confirmed.
-- The system does not invent care locations.
-- The system does not claim ambulance dispatch, government EMS involvement, or hospital acceptance unless evidence supports it.
-- The response line path is deployment-configured and documented as such.
-
-### Protected Internal Surfaces
-
-- `/api/config/vapi` requires `PULSE_OPS_TOKEN`.
-- `/api/adaption/safety-lab` requires `PULSE_OPS_TOKEN`.
-- Protected diagnostics are for maintainers, not the public bystander flow.
-
-More detail: [docs/SAFETY_AND_EVALUATION.md](docs/SAFETY_AND_EVALUATION.md)
-
-## API Surface
-
-| Route | Method | Access | Purpose |
-| --- | --- | --- | --- |
-| `/api/realtime/session` | `POST` | Public | Creates an ephemeral OpenAI Realtime transcription session for browser audio. |
-| `/api/speech/finalize` | `POST` | Public | Runs final transcription over captured browser audio. |
-| `/api/triage` | `POST` | Public | Returns structured emergency classification and bystander guidance. |
-| `/api/guidance/infographic` | `POST` | Public | Generates a calm pictorial guide or fallback result. |
-| `/api/hospitals?lat={lat}&lng={lng}` | `GET` | Public | Searches and ranks nearby emergency-care options. |
-| `/api/dispatch/session` | `POST` | Public | Issues a short-lived dispatch session token after review. |
-| `/api/dispatch/call` | `POST` | Public + token | Sends the incident brief and starts the live help-contact path. |
-| `/api/dispatch/status?statusToken={token}` | `GET` | Public status token | Returns normalized, redacted call status without exposing raw provider call IDs. |
-| `/api/config/health` | `GET` | Public redacted | Returns readiness labels without secrets. |
-| `/api/config/vapi` | `GET/POST` | Protected | Provider diagnostics and controlled operations checks. |
-| `/api/adaption/safety-lab` | `GET/POST` | Protected | Emergency scenario evaluation seed and optional sync. |
-
-## Local Setup
-
-### Requirements
-
-- Node.js 22 recommended for parity with CI.
-- npm.
-- Browser with microphone and geolocation permissions for local manual testing.
-
-### Install
+### Frontend and protected proxy
 
 ```bash
 npm ci
-```
-
-### Configure
-
-```bash
 cp .env.example .env.local
-```
-
-Fill only the values needed for the path you are testing. Do not commit `.env.local`.
-
-### Run
-
-```bash
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
-
-## Environment Contract
-
-### Core Variables
-
-| Variable | Required For | Notes |
-| --- | --- | --- |
-| `OPENAI_API_KEY` | Speech, triage, images | Required for AI-backed path. |
-| `OPENAI_MODEL` | Triage | Defaults are documented in `.env.example`. |
-| `OPENAI_REALTIME_TRANSCRIPTION_MODEL` | Realtime speech | Use a realtime transcription-compatible model. |
-| `OPENAI_FINAL_TRANSCRIPTION_MODEL` | Final transcript | Used by `/api/speech/finalize`. |
-| `OPENAI_IMAGE_MODEL` | Pictorial guidance | Fallback UI is used if unavailable. |
-| `GOOGLE_MAPS_API_KEY` or `GOOGLE_PLACES_API_KEY` | Nearby-care search | Used by `/api/hospitals`. |
-| `VAPI_API_KEY` | Vapi calls | Required for Vapi live path. |
-| `VAPI_PHONE_NUMBER_ID` | Vapi calls | Must match the active configured Vapi phone number. |
-| `PULSE_COORDINATION_PHONE` | Live response line | Primary response-line destination. |
-| `PULSE_OPERATOR_PHONE` | Legacy fallback | Still accepted during migration. |
-| `PULSE_RECEIVING_PHONE` | Legacy fallback | Still accepted during migration. |
-| `PULSE_DISPATCH_SESSION_SECRET` | Dispatch and status token signing | Required in production. |
-| `PULSE_RATE_LIMIT_REDIS_URL` | Durable rate limiting | Optional locally; recommended for production. Compatible with Upstash Redis REST. |
-| `PULSE_RATE_LIMIT_REDIS_TOKEN` | Durable rate limiting | Required when `PULSE_RATE_LIMIT_REDIS_URL` is set. |
-| `PULSE_OPS_TOKEN` | Protected diagnostics | Required for internal operations routes. |
-
-### Messaging Variables
-
-Use one of these paths:
-
-| Path | Variables |
-| --- | --- |
-| Twilio SMS | `TWILIO_ACCOUNT_SID`, `TWILIO_API_KEY_SID` or `TWILIO_AUTH_TOKEN`, `TWILIO_API_KEY_SECRET`, `TWILIO_FROM_NUMBER` or `SMS_FROM_NUMBER` |
-| Message webhook | `PULSE_MESSAGE_WEBHOOK_URL`, optional `PULSE_MESSAGE_WEBHOOK_TOKEN` |
-
-### Recommended Production Defaults
+Minimum local proxy values:
 
 ```bash
-PULSE_CALL_PROVIDER=vapi
-PULSE_REQUIRE_INTERACTIVE_CALL=true
-PULSE_DISPATCH_MODE=live
+PULSE_AGENT_BACKEND_URL=http://localhost:9000
+PULSE_AGENT_BACKEND_TOKEN=replace-with-a-long-random-value
+PULSE_AGENT_RECEIPT_SECRET=replace-with-an-independent-long-random-value
+PULSE_DISPATCH_SESSION_SECRET=replace-with-an-independent-long-random-value
 ```
 
-### Live Audit Gate
+### Function Compute backend
 
 ```bash
-PULSE_ALLOW_LIVE_AUDIT=true
+python3 -m venv .venv
+.venv/bin/pip install -r backend/requirements-dev.txt
+export DASHSCOPE_API_KEY=replace-me
+export GOOGLE_MAPS_API_KEY=replace-me
+export PULSE_AGENT_BACKEND_TOKEN=replace-with-the-same-backend-token
+.venv/bin/uvicorn backend.app:app --host 0.0.0.0 --port 9000
 ```
 
-Only set this when deliberately validating the deployed live-service path.
+Never place any credential in a `NEXT_PUBLIC_` variable. The inherited `.env.local` and Vercel linkage are intentionally absent from this clone.
 
 ## Verification
 
-### Routine Verification
-
 ```bash
 npm run lint
 npm run build
 npm run test:mocked
-npm run test:prod-audit
+npm run test:backend
 ```
 
-Expected routine result:
-
-- lint passes,
-- production build passes,
-- mocked product tests pass,
-- production audit reports one skipped test unless `PULSE_ALLOW_LIVE_AUDIT=true`.
-
-### What The Mocked Tests Prove
-
-- The mobile bystander flow reaches accepted help evidence.
-- The mobile bystander flow does not overstate unconfirmed help.
-- Dispatch is not called before transcript review confirmation.
-- Rejection phrases such as `not available`, `full`, and `try another` do not become accepted.
-- Explicit receive confirmation can become accepted.
-- In-flight and failed call states remain distinct.
-
-### Secret Hygiene Check
+The production audit remains deliberately gated so routine CI cannot place a live call:
 
 ```bash
-rg -n \
-  -e "sk-[A-Za-z0-9_-]{20,}" \
-  -e "(OPENAI_API_KEY|VAPI_API_KEY|TWILIO_AUTH_TOKEN|TWILIO_API_KEY_SECRET|PULSE_OPS_TOKEN|PULSE_DISPATCH_SESSION_SECRET)\s*=\s*[^\s#]+" \
-  --glob '!node_modules/**' \
-  --glob '!.git/**' \
-  --glob '!.next/**' \
-  --glob '!test-results/**' \
-  --glob '!playwright-report/**' \
-  --glob '!package-lock.json' \
-  .
+PULSE_ALLOW_LIVE_AUDIT=true npm run test:prod-audit
 ```
 
-No matches should be returned.
+## Built with
 
-## Deployment
+Qwen Cloud · `qwen3.7-plus` · Alibaba Function Compute · FastAPI · Pydantic · httpx · Next.js 16 · React 19 · TypeScript · Google Places/Distance Matrix · Vapi · Twilio · OpenAI speech/image APIs · Vercel · Playwright · pytest
 
-Pulse is designed for Vercel deployment.
+## Existing-work disclosure and limitations
 
-1. Set environment variables in the deployment dashboard.
-2. Keep real secrets out of the repository.
-3. Use `PULSE_DISPATCH_MODE=live` for the full live path.
-4. Keep `PULSE_REQUIRE_INTERACTIVE_CALL=true` when the deployment should require interactive calling.
-5. Verify `/api/config/health` returns redacted readiness labels.
-6. Run routine checks locally or through GitHub Actions before release.
-7. Run live audit only as a controlled operation.
+This entry is an isolated, no-hardlinks clone of the pre-existing Pulse Emergency project at commit `a83e85c`. Before the hackathon adaptation, Pulse already contained the mobile bystander UI, voice intake, Google nearby-care search, provider calling, safety guidance, and evidence-based outcome states.
 
-CI is defined in [.github/workflows/ci.yml](.github/workflows/ci.yml).
+New work in this repository includes the Qwen Cloud reasoning/tool loop, deterministic protocol boundary, Alibaba Function Compute backend, ordered hashed trace, strict tool/ID validation, signed agent receipt, plan/facility-bound human approval gate, Qwen coordination and approval UI, deployment metadata endpoint, cloud packaging, new evaluation suite, and new submission documentation/assets.
 
-## Operations
+Limitations:
 
-Operational review lives in [docs/OPERATIONS.md](docs/OPERATIONS.md).
+- demo reports are fictional and contain no real patient data;
+- public Google listings cannot prove capacity, clinical capability, beds, or acceptance;
+- this prototype is not a medical device, dispatch service, or replacement for local emergency services;
+- authentic Qwen and Alibaba proof is never simulated or backfilled.
 
-Key rules:
-
-- Protected routes require `PULSE_OPS_TOKEN`.
-- Do not copy raw provider transcripts into public issues.
-- Do not run live provider checks accidentally.
-- Treat any call, text, webhook, or provider mutation as an intentional operations drill.
-- If credentials rotate, update deployment environment variables only.
-
-## Repository Quality Evidence
-
-| Evidence | File |
-| --- | --- |
-| Architecture | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
-| Safety and evaluation | [docs/SAFETY_AND_EVALUATION.md](docs/SAFETY_AND_EVALUATION.md) |
-| Testing | [docs/TESTING.md](docs/TESTING.md) |
-| Operations | [docs/OPERATIONS.md](docs/OPERATIONS.md) |
-| Production readiness | [docs/PRODUCTION_READINESS.md](docs/PRODUCTION_READINESS.md) |
-| Judge readiness | [docs/JUDGE_READINESS.md](docs/JUDGE_READINESS.md) |
-| Security | [SECURITY.md](SECURITY.md) |
-| Contributing | [CONTRIBUTING.md](CONTRIBUTING.md) |
-| Pull request checklist | [.github/pull_request_template.md](.github/pull_request_template.md) |
-| CI workflow | [.github/workflows/ci.yml](.github/workflows/ci.yml) |
-| Issue templates | [.github/ISSUE_TEMPLATE](.github/ISSUE_TEMPLATE) |
-
-## Known Boundaries
-
-Pulse is an emergency-domain assistant, not official emergency services.
-
-- It does not replace calling the local emergency number.
-- It does not claim ambulance dispatch.
-- It does not invent hospital availability.
-- It does not expose raw call transcripts through the public status route.
-- It depends on deployment configuration for the response line and provider credentials.
-- Live provider tests must be intentional and controlled.
-
-## Project Structure
-
-```text
-.
-├── .github/
-│   ├── workflows/ci.yml
-│   ├── ISSUE_TEMPLATE/
-│   ├── CODEOWNERS
-│   └── pull_request_template.md
-├── docs/
-│   ├── ARCHITECTURE.md
-│   ├── DEMO.md
-│   ├── JUDGE_READINESS.md
-│   ├── OPERATIONS.md
-│   ├── PRODUCTION_READINESS.md
-│   ├── SAFETY_AND_EVALUATION.md
-│   └── TESTING.md
-├── public/
-│   └── pulse-emergency-logo-512.png
-├── src/
-│   ├── app/
-│   │   ├── api/
-│   │   ├── globals.css
-│   │   ├── layout.tsx
-│   │   └── page.tsx
-│   └── lib/
-│       ├── dispatch-session.ts
-│       ├── handoff.ts
-│       └── response-line.ts
-├── tests/
-│   ├── handoff-inference.spec.ts
-│   ├── pulse-coordination-ui.spec.ts
-│   └── pulse-prod-audit.spec.ts
-├── CONTRIBUTING.md
-├── SECURITY.md
-├── README.md
-├── package.json
-└── playwright.config.ts
-```
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md).
-
-Before opening a pull request:
-
-```bash
-npm run lint
-npm run build
-npm run test:mocked
-```
-
-Safety-sensitive changes should explain:
-
-- whether public copy changed,
-- whether any path can place live calls or messages,
-- whether status wording can overclaim acceptance,
-- whether any private data or credentials are exposed,
-- and how the change was verified.
+The original repository, Git remote, and deployment remain untouched. This repository is licensed under the [MIT License](LICENSE).
