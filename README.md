@@ -34,10 +34,10 @@ This makes the agent useful in a consequential workflow without pretending that 
 ## Live demo
 
 - New public app: [pulse-qwen-autopilot.vercel.app](https://pulse-qwen-autopilot.vercel.app/)
-- Three-minute video: added after the authenticated cloud deployment is recorded
+- Three-minute video: [Pulse Qwen Autopilot — Qwen Cloud Hackathon Track 4 Demo](https://youtu.be/4fUHqS4kLqI)
 - Track: **Track 4 — Autopilot Agent**
 
-Public judging is sandboxed. The authentic recorded call is restricted to Pulse’s existing controlled response line; no hospital or emergency-service number is dialled.
+Public judging is sandboxed. Choose **Try fictional Singapore demo** to use a typed synthetic report, fixed coarse demo location, live Qwen orchestration, and a no-call outcome. No hospital or emergency-service number is dialled.
 
 ## What Qwen does
 
@@ -104,6 +104,8 @@ Current reproducible evidence:
 | Live cloud evaluation | 5/5 Qwen runs passing | five schema-valid four-tool runs through Function Compute; 0 fabricated facility IDs; 0 approval/call tools; missing location rejected with 422 |
 
 The sanitized generated result is [evaluation/results/live-evaluation.json](evaluation/results/live-evaluation.json). It contains authentic Qwen and Function Compute request IDs but omits reports, exact coordinates, facility names, phone numbers, credentials, and receipts. Approval bypass, Qwen outage/retry, and uncertain-listing cases remain covered by the local safety suites.
+
+![Pulse Qwen Autopilot evaluation summary](docs/evaluation-summary.png)
 
 ## Alibaba Cloud deployment proof
 

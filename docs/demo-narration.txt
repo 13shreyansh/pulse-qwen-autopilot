@@ -1,0 +1,13 @@
+In an emergency, the first report is often frightened and incomplete. A fluent chatbot can make that worse by inventing facts. Pulse Qwen Autopilot turns ambiguity into a sourced, auditable coordination plan, then stops before any consequential action. This is a fictional exercise, not emergency services or medical advice.
+
+Here is the trust boundary. Qwen Cloud interprets the report and decides which bounded tool to call next. Deterministic code owns conservative protocols, real facility identifiers, geospatial evidence, hashes, and approval enforcement. The FastAPI agent runs on Alibaba Cloud Function Compute in Singapore, while a protected Next.js proxy signs the complete report, plan, and facility receipt.
+
+For a safe public test, I choose the fictional Singapore demo. No browser location, microphone, hospital, or emergency number is used. I enter: a cyclist was hit near the road; he is awake and breathing, but cannot stand. Immediate conservative guidance appears first. Then qwen3.7-plus executes four validated tools in order: select the emergency protocol, search sourced nearby care, prepare a verified handoff, and submit the coordination plan.
+
+The result is not a generic paragraph. Pulse shows the selected protocol, real OpenStreetMap facility identifiers and source links, distance evidence, a deterministic plan hash, and authentic Qwen and Function Compute request identifiers. Every tool result is canonicalized and SHA-256 hashed. The interface explicitly says that a public listing does not prove beds, clinical readiness, capacity, or acceptance.
+
+Now the critical boundary: Qwen has no approval or calling tool. Choosing another searched facility requires a written override reason. Modified receipts, plans, or facility identifiers are rejected. Only this separate human approval can create a short-lived dispatch token bound to the same report, Qwen run, plan, and facility. Public judging ends in a clearly labelled sandbox outcome; another attempt requires another approval.
+
+The evidence is reproducible. Five of five live cloud scenarios completed the full four-tool sequence with schema-valid output. The evaluation recorded zero fabricated facility identifiers and zero unauthorized approval or call tools. Ten backend tests and seventeen browser tests pass, along with lint and the production build.
+
+The repository includes the MIT license, architecture, evaluation output, source code, and honest disclosure of the original Pulse foundation. These screenshots show the Alibaba Function Compute deployment and public trigger. Pulse gives Qwen agency where reasoning helps, and removes agency where human accountability matters.
