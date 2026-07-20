@@ -305,7 +305,7 @@ test("mobile panic flow shows guidance before dispatch and accepted help evidenc
   await expect(page.getByLabel("I heard this")).toHaveValue(/A person fell near the road/);
   expect(mocks.getDispatchRequests()).toBe(0);
 
-  await page.getByRole("button", { name: "Send for help" }).click();
+  await page.getByRole("button", { name: "Ask Qwen to coordinate" }).click();
 
   await expect(page.getByRole("heading", { name: "Review before Pulse contacts anyone" })).toBeVisible({ timeout: 20000 });
   expect(mocks.getDispatchRequests()).toBe(0);
@@ -338,7 +338,7 @@ test("mobile panic flow does not overstate an unconfirmed handoff", async ({ pag
   await page.getByRole("button", { name: "Review report" }).click();
   await expect(page.getByRole("heading", { name: "This is what I heard." })).toBeVisible({ timeout: 15000 });
   expect(mocks.getDispatchRequests()).toBe(0);
-  await page.getByRole("button", { name: "Send for help" }).click();
+  await page.getByRole("button", { name: "Ask Qwen to coordinate" }).click();
 
   await expect(page.getByRole("heading", { name: "Review before Pulse contacts anyone" })).toBeVisible({ timeout: 20000 });
   expect(mocks.getDispatchRequests()).toBe(0);

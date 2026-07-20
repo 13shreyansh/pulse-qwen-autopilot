@@ -1418,7 +1418,7 @@ function StartScreen({
                   Get help now
                 </h1>
                 <p className="mt-5 max-w-2xl text-base font-semibold leading-7 text-[#475569] sm:text-lg sm:leading-8 lg:text-xl lg:leading-9">
-                  I’ll get your location, listen to what happened, and contact help while you stay with them.
+                  I’ll get your location, listen to what happened, and prepare a grounded plan for you to approve while you stay with them.
                 </p>
               </div>
               <div className="lg:hidden">
@@ -1448,7 +1448,7 @@ function StartScreen({
             </button>
 
             <p className="mt-6 max-w-xl text-sm font-bold leading-6 text-[#475569]">
-              Pulse will contact help after your report. First, make sure you are safe.
+              Pulse prepares a plan after your report. Nobody is contacted until you approve it. First, make sure you are safe.
             </p>
           </div>
 
@@ -1694,7 +1694,7 @@ function ConfirmReportScreen({
           This is what I heard.
         </h1>
         <p className="mt-3 max-w-2xl text-base font-semibold leading-7 text-[#475569]">
-          Check this once. Pulse will share your location and contact help only after you confirm.
+          Check this once. Qwen will use the reviewed report to prepare a plan. Nobody is contacted until you approve that separate plan.
         </p>
 
         <label htmlFor="confirmed-report" className="mt-7 block text-sm font-semibold text-[#475569]">
@@ -1724,7 +1724,7 @@ function ConfirmReportScreen({
             className="inline-flex min-h-14 items-center justify-center gap-2 rounded-lg bg-[#c81e36] px-5 text-base font-semibold text-white shadow-[0_16px_34px_rgba(143,24,48,0.18)] transition hover:bg-[#a61b32] focus:outline-none focus:ring-4 focus:ring-[rgba(200,30,54,0.16)] disabled:bg-[#d8a1aa]"
           >
             <Send className="size-4" />
-            Send for help
+            Ask Qwen to coordinate
           </button>
         </div>
       </section>
@@ -1734,7 +1734,7 @@ function ConfirmReportScreen({
         <div className="rounded-lg border border-[#d8e3f1] bg-white p-5 shadow-sm">
           <p className="text-lg font-semibold text-[#111827]">Stay with them. Keep them still.</p>
           <p className="mt-2 text-sm font-bold leading-6 text-[#475569]">
-            This review step prevents wrong speech text from being sent for help.
+            This review step prevents wrong speech text from being used to build the coordination plan.
           </p>
         </div>
       </aside>
